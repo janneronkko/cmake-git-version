@@ -19,23 +19,26 @@ class GitVersionTests( TestCase ):
     self.path = tempfile.mkdtemp()
     os.chdir( self.path )
 
-    self._initializeGitClone( 'clone' )
-
-    self._createHistory()
-
-    self.configure()
-
-  def _initializeGitClone( self, directory ):
+  def initializeGitClone( self, directory = 'clone', gitVersionDir = None ):
     git.init( directory )
     os.chdir( directory )
-    testenv.install( 'GitVersion.cmake' )
-    testenv.install( 'GitVersionCached.cmake.in' )
 
-    createCmakeFiles()
+    gitversioncmake = 'GitVersion.cmake'
+    if gitVersionDir is None:
+      gitVersionDir = '.'
+    else:
+      gitversioncmake = '{0}/{1}'.format( gitVersionDir, gitversioncmake )
+      if not os.path.isdir( gitVersionDir ):
+        os.mkdir( gitVersionDir )
+
+    testenv.install( 'GitVersion.cmake', gitVersionDir )
+    testenv.install( 'GitVersionCached.cmake.in', gitVersionDir )
+
+    createCmakeFiles( gitversioncmake = gitversioncmake )
 
     git.add( 'CMakeLists.txt' )
-    git.add( 'GitVersion.cmake' )
-    git.add( 'GitVersionCached.cmake.in' )
+    git.add( os.path.join( gitVersionDir, 'GitVersion.cmake' ) )
+    git.add( os.path.join( gitVersionDir, 'GitVersionCached.cmake.in' ) )
 
     git.commit( 'Add automatic version generation' )
 
@@ -57,14 +60,17 @@ class GitVersionTests( TestCase ):
   def tearDown( self ):
     shutil.rmtree( self.path )
 
-  def _createHistory( self ):
-    pass
-
   def testVersionWithoutTag( self ):
+    self.initializeGitClone()
+    self.configure()
+
     self.assertEqual( self.headCommit(), self.results[ 'CommitSha' ] )
     self.assertEqual( self.headCommit(), self.results[ 'Version' ] )
 
   def testTaggedVersion( self ):
+    self.initializeGitClone()
+    self.configure()
+
     createCommit( 'f1.txt' )
     git.tag( '1.0', message = 'Version 1.0' )
 
@@ -74,6 +80,9 @@ class GitVersionTests( TestCase ):
     self.assertEqual( '1.0', self.results[ 'Version' ] )
 
   def testTaggedVersionWithAdditionalChanges( self ):
+    self.initializeGitClone()
+    self.configure()
+
     createCommit( 'f1.txt' )
     git.tag( '1.0', message = 'Version 1.0' )
     createCommit( 'f2.txt' )
@@ -86,6 +95,9 @@ class GitVersionTests( TestCase ):
 
 
   def testCachedVersion( self ):
+    self.initializeGitClone()
+    self.configure()
+
     createCommit( 'f1.txt' )
     git.tag( '1.0', message = 'Version 1.0' )
 
@@ -100,6 +112,9 @@ class GitVersionTests( TestCase ):
     self.assertEqual( '1.0', self.results[ 'Version' ] )
 
   def testCustomGitDescribeArguments( self ):
+    self.initializeGitClone()
+    self.configure()
+
     createCommit( 'f1.txt' )
     git.tag( '1.0', message = 'Version 1.0' )
     createCommit( 'f2.txt' )
@@ -112,9 +127,12 @@ class GitVersionTests( TestCase ):
     self.assertRegexpMatches( self.results[ 'Version' ], r'pre-2.0-1-g[0-9a-f]{4}' )
 
   def testSubProjectVersion( self ):
+    self.initializeGitClone()
+    self.configure()
+
     git.tag( 'project-1.0', message = 'project-1.0' )
 
-    self._initializeGitClone( 'subproject' )
+    self.initializeGitClone( 'subproject' )
     git.tag( 'subproject-1.0', message = 'subproject-1.0' )
     os.chdir( '..' )
     with open( 'CMakeLists.txt', 'a' ) as f:
@@ -127,6 +145,10 @@ class GitVersionTests( TestCase ):
     self.assertEqual( self.results[ 'Version'], 'project-1.0' )
     self.assertEqual( subProjectResults[ 'Version'], 'subproject-1.0' )
 
+  def testUsingFromSubdirectory( self ):
+    self.initializeGitClone( gitVersionDir = 'gitversion' )
+    self.configure()
+
 
 def createCommit( filename ):
   with open( filename, 'a' ) as f:
@@ -135,10 +157,14 @@ def createCommit( filename ):
   git.add( filename )
   git.commit( 'Dummy commit: {0}'.format( filename ) )
 
-def createCmakeFiles():
+def createCmakeFiles( gitversioncmake = 'GitVersion.cmake' ):
   print( 'Creating CMakeLists.txt' )
+
+  data = CMakeListsFile.format(
+    gitversioncmake = gitversioncmake
+  )
   with open( 'CMakeLists.txt', 'w' ) as f:
-    f.write( CMakeListsFile )
+    f.write( data )
 
 def parseValueFile( path ):
   ValueLineRe = re.compile( r'(?P<key>[^=]+)=(?P<value>.*)' )
@@ -161,11 +187,11 @@ cmake_minimum_required( VERSION 2.8 )
 
 project( GitVersionTest )
 
-include( GitVersion.cmake )
+include( {gitversioncmake} )
 
 GitVersionResolveVersion( Version CommitSha )
 
-file( WRITE results.cmake "Version=${Version}\nCommitSha=${CommitSha}\n" )
+file( WRITE results.cmake "Version=${{Version}}\nCommitSha=${{CommitSha}}\n" )
 
 '''
 

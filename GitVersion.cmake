@@ -38,6 +38,11 @@
 #   file to the source distribution if you want version info to be
 #   available outside git clone.
 #
+# GIT_VERSION_DIR
+#
+#   The directory containing GitVersionCached.cmake.in file. If not set
+#   the directory where GitVersion.cmake is located is used.
+#
 # GIT_VERSION_DESCRIBE_ARGS
 #
 #   List of arguments passed to git describe when determining version.
@@ -71,6 +76,10 @@ if( NOT DEFINED GIT_VERSION_CACHE_FILE )
     GIT_VERSION_CACHE_FILE
     ${CMAKE_CURRENT_SOURCE_DIR}/GitVersionCached.cmake
   )
+endif()
+
+if( NOT DEFINED GIT_VERSION_DIR )
+  set( GIT_VERSION_DIR "${CMAKE_CURRENT_LIST_DIR}" )
 endif()
 
 function( GitVersionResolveVersion VersionVar CommitVar )
@@ -119,7 +128,7 @@ function( GitVersionResolveVersion VersionVar CommitVar )
   endif()
 
   file( REMOVE "${GIT_VERSION_CACHE_FILE}" )
-  configure_file( GitVersionCached.cmake.in "${GIT_VERSION_CACHE_FILE}" @ONLY )
+  configure_file( ${GIT_VERSION_DIR}/GitVersionCached.cmake.in "${GIT_VERSION_CACHE_FILE}" @ONLY )
 
   SetResultAndReturn()
 
