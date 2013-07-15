@@ -19,8 +19,15 @@ class GitVersionTests( TestCase ):
     self.path = tempfile.mkdtemp()
     os.chdir( self.path )
 
-    git.init( 'clone' )
-    os.chdir( 'clone' )
+    self._initializeGitClone( 'clone' )
+
+    self._createHistory()
+
+    self.configure()
+
+  def _initializeGitClone( self, directory ):
+    git.init( directory )
+    os.chdir( directory )
     testenv.install( 'GitVersion.cmake' )
     testenv.install( 'GitVersionCached.cmake.in' )
 
@@ -31,10 +38,6 @@ class GitVersionTests( TestCase ):
     git.add( 'GitVersionCached.cmake.in' )
 
     git.commit( 'Add automatic version generation' )
-
-    self._createHistory()
-
-    self.configure()
 
   def headCommit( self ):
     return git.revParse( 'HEAD' )
@@ -107,6 +110,22 @@ class GitVersionTests( TestCase ):
 
     self.assertEqual( self.headCommit(), self.results[ 'CommitSha' ] )
     self.assertRegexpMatches( self.results[ 'Version' ], r'pre-2.0-1-g[0-9a-f]{4}' )
+
+  def testSubProjectVersion( self ):
+    git.tag( 'project-1.0', message = 'project-1.0' )
+
+    self._initializeGitClone( 'subproject' )
+    git.tag( 'subproject-1.0', message = 'subproject-1.0' )
+    os.chdir( '..' )
+    with open( 'CMakeLists.txt', 'a' ) as f:
+      f.write( 'add_subdirectory( subproject )\n\n' )
+
+    self.configure( 'build' )
+
+    subProjectResults = parseValueFile( os.path.join( 'subproject', 'results.cmake' ) )
+
+    self.assertEqual( self.results[ 'Version'], 'project-1.0' )
+    self.assertEqual( subProjectResults[ 'Version'], 'subproject-1.0' )
 
 
 def createCommit( filename ):

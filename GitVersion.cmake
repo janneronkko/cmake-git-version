@@ -27,6 +27,9 @@
 # i.e. the version info is also available when the code is not located in
 # git clone.
 #
+# The versions are handled correctly also for gitmodules meaning that you
+# get the right version number also for all the sub projects.
+#
 # ## Configuration Variables ##
 #
 # GIT_VERSION_CACHE_FILE
@@ -146,7 +149,7 @@ function( GitVersionResolveGitdir ResultVar )
 
   GitVersionRunGitCommand( GitDir rev-parse --git-dir )
 
-  if( NOT "${GitDir}" STREQUAL "GitDir-NOTFOUND" )
+  if( NOT "${GitDir}" STREQUAL "GitDir-NOTFOUND" AND IS_ABSOLUTE "${GitDir}" )
     file( RELATIVE_PATH GitDir ${CMAKE_CURRENT_SOURCE_DIR} "${GitDir}" )
   endif()
 
@@ -158,6 +161,7 @@ function( GitVersionRunGitCommand ResultVarName )
 
   execute_process(
     COMMAND ${GitBin} ${ARGN}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     RESULT_VARIABLE ExitCode
     OUTPUT_VARIABLE Output
     ERROR_QUIET
