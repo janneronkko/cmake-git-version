@@ -158,6 +158,18 @@ function( GitVersionResolveGitdir ResultVar )
 
   GitVersionRunGitCommand( GitDir rev-parse --git-dir )
 
+  if( NOT EXISTS "${GitDir}" )
+    find_program( Cygpath cygpath )
+    if( NOT "${Cygpath}" STREQUAL "Cygpath-NOTFOUND" )
+      execute_process(
+        COMMAND cygpath -m ${GitDir}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GitDir
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+    endif()
+  endif()
+
   if( NOT "${GitDir}" STREQUAL "GitDir-NOTFOUND" AND IS_ABSOLUTE "${GitDir}" )
     file( RELATIVE_PATH GitDir ${CMAKE_CURRENT_SOURCE_DIR} "${GitDir}" )
   endif()
