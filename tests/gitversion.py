@@ -1,193 +1,208 @@
-from . import cmake
-from . import git
-from . import testenv
-
+import functools
 import os
 import re
 import shutil
 import tempfile
 from unittest import TestCase
 
-
-class GitVersionTests( TestCase ):
-
-  def setUp( self ):
-    self.path = tempfile.mkdtemp()
-    os.chdir( self.path )
-
-  def initializeGitClone( self, directory = 'clone', gitVersionDir = None ):
-    git.init( directory )
-    os.chdir( directory )
-
-    gitversioncmake = 'GitVersion.cmake'
-    if gitVersionDir is None:
-      gitVersionDir = '.'
-    else:
-      gitversioncmake = '{0}/{1}'.format( gitVersionDir, gitversioncmake )
-      if not os.path.isdir( gitVersionDir ):
-        os.mkdir( gitVersionDir )
-
-    testenv.install( 'GitVersion.cmake', gitVersionDir )
-    testenv.install( 'GitVersionCached.cmake.in', gitVersionDir )
-
-    createCmakeFiles( gitversioncmake = gitversioncmake )
-
-    git.add( 'CMakeLists.txt' )
-    git.add( os.path.join( gitVersionDir, 'GitVersion.cmake' ) )
-    git.add( os.path.join( gitVersionDir, 'GitVersionCached.cmake.in' ) )
-
-    git.commit( 'Add automatic version generation' )
-
-  def headCommit( self ):
-    return git.revParse( 'HEAD' )
-
-  def configure( self, directory = 'build', cmakeArgs = {} ):
-    if not os.path.isdir( directory ):
-      os.mkdir( directory )
-
-    os.chdir( directory )
-
-    cmake.configure( '..', args = cmakeArgs )
-
-    self.results = parseValueFile( os.path.join( '..', 'results.cmake' ) )
-
-    os.chdir( '..' )
-
-  def tearDown( self ):
-    shutil.rmtree( self.path )
-
-  def testVersionWithoutTag( self ):
-    self.initializeGitClone()
-    self.configure()
-
-    self.assertEqual( self.headCommit(), self.results[ 'CommitSha' ] )
-    self.assertEqual( self.headCommit(), self.results[ 'Version' ] )
-
-  def testTaggedVersion( self ):
-    self.initializeGitClone()
-    self.configure()
-
-    createCommit( 'f1.txt' )
-    git.tag( '1.0', message = 'Version 1.0' )
-
-    self.configure( 'build' )
-
-    self.assertEqual( self.headCommit(), self.results[ 'CommitSha' ] )
-    self.assertEqual( '1.0', self.results[ 'Version' ] )
-
-  def testTaggedVersionWithAdditionalChanges( self ):
-    self.initializeGitClone()
-    self.configure()
-
-    createCommit( 'f1.txt' )
-    git.tag( '1.0', message = 'Version 1.0' )
-    createCommit( 'f2.txt' )
-    createCommit( 'f3.txt' )
-
-    self.configure( 'build' )
-
-    self.assertEqual( self.headCommit(), self.results[ 'CommitSha' ] )
-    self.assertRegexpMatches( self.results[ 'Version' ], r'1.0-2-g[0-9a-f]+' )
+from . import cmake
+from . import git
+from . import testenv
 
 
-  def testCachedVersion( self ):
-    self.initializeGitClone()
-    self.configure()
+class GitVersionTests(TestCase):
+    def setUp(self):
+        super().setUp()
 
-    createCommit( 'f1.txt' )
-    git.tag( '1.0', message = 'Version 1.0' )
+        self.path = tempfile.mkdtemp()
+        self.addCleanup(functools.partial(
+            shutil.rmtree,
+            self.path,
+        ))
+        os.chdir(self.path)
 
-    self.configure( 'build2' )
+    def initialize_git_clone(
+        self,
+        directory='clone',
+        git_version_dir=None,
+    ):
+        git.init(directory)
+        os.chdir(directory)
 
-    commit = self.headCommit()
-    shutil.rmtree( os.path.join( '.git' ) )
+        git_version_cmake = 'GitVersion.cmake'
+        if git_version_dir is None:
+            git_version_dir = '.'
 
-    self.configure( 'cached-build' )
+        else:
+            git_version_cmake = f'{git_version_dir}/{git_version_cmake}'
 
-    self.assertEqual( commit, self.results[ 'CommitSha' ] )
-    self.assertEqual( '1.0', self.results[ 'Version' ] )
+        if not os.path.isdir(git_version_dir):
+            os.mkdir(git_version_dir)
 
-  def testCustomGitDescribeArguments( self ):
-    self.initializeGitClone()
-    self.configure()
+        testenv.install('GitVersion.cmake', git_version_dir)
+        testenv.install('GitVersionCached.cmake.in', git_version_dir)
 
-    createCommit( 'f1.txt' )
-    git.tag( '1.0', message = 'Version 1.0' )
-    createCommit( 'f2.txt' )
-    git.tag( 'pre-2.0' )
-    createCommit( 'f3.txt' )
+        create_cmake_files(git_version_cmake=git_version_cmake)
 
-    self.configure( 'build2', cmakeArgs = { 'GIT_VERSION_DESCRIBE_ARGS': '--abbrev=4;--tags' } )
+        git.add('CMakeLists.txt')
+        git.add(os.path.join(git_version_dir, 'GitVersion.cmake'))
+        git.add(os.path.join(git_version_dir, 'GitVersionCached.cmake.in'))
 
-    self.assertEqual( self.headCommit(), self.results[ 'CommitSha' ] )
-    self.assertRegexpMatches( self.results[ 'Version' ], r'pre-2.0-1-g[0-9a-f]{4}' )
+        git.commit('Add automatic version generation')
 
-  def testSubProjectVersion( self ):
-    self.initializeGitClone()
-    self.configure()
+    def head_commit(self):
+        return git.rev_parse('HEAD')
 
-    git.tag( 'project-1.0', message = 'project-1.0' )
+    def configure(
+        self,
+        directory='build',
+        cmake_args={},
+    ):
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
 
-    self.initializeGitClone( 'subproject' )
-    git.tag( 'subproject-1.0', message = 'subproject-1.0' )
-    os.chdir( '..' )
-    with open( 'CMakeLists.txt', 'a' ) as f:
-      f.write( 'add_subdirectory( subproject )\n\n' )
+        os.chdir(directory)
 
-    self.configure( 'build' )
+        cmake.configure('..', args=cmake_args)
 
-    subProjectResults = parseValueFile( os.path.join( 'subproject', 'results.cmake' ) )
+        self.results = parse_value_file(os.path.join('..', 'results.cmake'))
 
-    self.assertEqual( self.results[ 'Version'], 'project-1.0' )
-    self.assertEqual( subProjectResults[ 'Version'], 'subproject-1.0' )
+        os.chdir('..')
 
-  def testUsingFromSubdirectory( self ):
-    self.initializeGitClone( gitVersionDir = 'gitversion' )
-    self.configure()
+    def test_version_without_tag(self):
+        self.initialize_git_clone()
+        self.configure()
+
+        self.assertEqual(self.head_commit(), self.results['CommitSha'])
+        self.assertEqual(self.head_commit(), self.results['Version'])
+
+    def test_tagged_version(self):
+        self.initialize_git_clone()
+        self.configure()
+
+        create_commit('f1.txt')
+        git.tag('1.0', message='Version 1.0')
+
+        self.configure('build')
+
+        self.assertEqual(self.head_commit(), self.results['CommitSha'])
+        self.assertEqual('1.0', self.results['Version'])
+
+    def test_tagged_version_with_additional_changes(self):
+        self.initialize_git_clone()
+        self.configure()
+
+        create_commit('f1.txt')
+        git.tag('1.0', message='Version 1.0')
+        create_commit('f2.txt')
+        create_commit('f3.txt')
+
+        self.configure('build')
+
+        self.assertEqual(self.head_commit(), self.results['CommitSha'])
+        self.assertRegexpMatches(self.results['Version'], r'1.0-2-g[0-9a-f]+')
 
 
-def createCommit( filename ):
-  with open( filename, 'a' ) as f:
-    f.write( 'Line\n' )
+    def testCachedVersion(self):
+        self.initialize_git_clone()
+        self.configure()
 
-  git.add( filename )
-  git.commit( 'Dummy commit: {0}'.format( filename ) )
+        create_commit('f1.txt')
+        git.tag('1.0', message='Version 1.0')
 
-def createCmakeFiles( gitversioncmake = 'GitVersion.cmake' ):
-  print( 'Creating CMakeLists.txt' )
+        self.configure('build2')
+
+        commit = self.head_commit()
+        shutil.rmtree(os.path.join('.git'))
+
+        self.configure('cached-build')
+
+        self.assertEqual(commit, self.results['CommitSha'])
+        self.assertEqual('1.0', self.results['Version'])
+
+    def testCustomGitDescribeArguments(self):
+        self.initialize_git_clone()
+        self.configure()
+
+        create_commit('f1.txt')
+        git.tag('1.0', message='Version 1.0')
+        create_commit('f2.txt')
+        git.tag('pre-2.0')
+        create_commit('f3.txt')
+
+        self.configure('build2', cmake_args={'GIT_VERSION_DESCRIBE_ARGS': '--abbrev=4;--tags'})
+
+        self.assertEqual(self.head_commit(), self.results['CommitSha'])
+        self.assertRegexpMatches(self.results['Version'], r'pre-2.0-1-g[0-9a-f]{4}')
+
+    def testSubProjectVersion(self):
+        self.initialize_git_clone()
+        self.configure()
+
+        git.tag('project-1.0', message='project-1.0')
+
+        self.initialize_git_clone('subproject')
+        git.tag('subproject-1.0', message='subproject-1.0')
+        os.chdir('..')
+        with open('CMakeLists.txt', 'a') as f:
+            f.write('add_subdirectory(subproject)\n\n')
+
+        self.configure('build')
+
+        sub_project_results = parse_value_file(os.path.join('subproject', 'results.cmake'))
+
+        self.assertEqual(self.results['Version'], 'project-1.0')
+        self.assertEqual(sub_project_results['Version'], 'subproject-1.0')
+
+    def testUsingFromSubdirectory(self):
+        self.initialize_git_clone(git_version_dir='gitversion')
+        self.configure()
+
+
+def create_commit(filename):
+  with open(filename, 'a') as f:
+    f.write('Line\n')
+
+  git.add(filename)
+  git.commit('Dummy commit: {0}'.format(filename))
+
+
+def create_cmake_files(git_version_cmake = 'GitVersion.cmake'):
+  print('Creating CMakeLists.txt')
 
   data = CMakeListsFile.format(
-    gitversioncmake = gitversioncmake
+    git_version_cmake=git_version_cmake,
   )
-  with open( 'CMakeLists.txt', 'w' ) as f:
-    f.write( data )
+  with open('CMakeLists.txt', 'w') as f:
+    f.write(data)
 
-def parseValueFile( path ):
-  ValueLineRe = re.compile( r'(?P<key>[^=]+)=(?P<value>.*)' )
+
+def parse_value_file(path):
+  value_line_re = re.compile(r'(?P<key>[^=]+)=(?P<value>.*)')
 
   results = {}
 
-  with open( path, 'r' ) as f:
+  with open(path, 'r') as f:
     for line in f:
       line = line.strip()
-      m = ValueLineRe.match( line )
+      m = value_line_re.match(line)
       if m is not None:
-        results[ m.group( 'key' ) ] = m.group( 'value' )
+        results[m.group('key')] = m.group('value')
 
   return results
 
 
 CMakeListsFile = '''
 
-cmake_minimum_required( VERSION 3.0 )
+cmake_minimum_required(VERSION 3.0)
 
-project( GitVersionTest )
+project(GitVersionTest)
 
-include( {gitversioncmake} )
+include({git_version_cmake})
 
-GitVersionResolveVersion( Version CommitSha )
+GitVersionResolveVersion(Version CommitSha)
 
-file( WRITE results.cmake "Version=${{Version}}\nCommitSha=${{CommitSha}}\n" )
+file(WRITE results.cmake "Version=${{Version}}\nCommitSha=${{CommitSha}}\n")
 
 '''
 
