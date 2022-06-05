@@ -1,0 +1,7 @@
+*.cmake     text
+*.in        text
+*.py        text
+*.rst       text
+*.txt       text
+
+LICENSE     text
