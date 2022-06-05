@@ -18,6 +18,10 @@ git clone.
 The versions are handled correctly also for gitmodules meaning that you
 get the right version number also for all the sub projects.
 
+You can either copy *GitVersion.cmake* and *GitVersionCached.cmake.in* files
+to your project or include this repository as Git submodule or use Git subtree
+to include this repository in your project.
+
 Example
 -------
 
