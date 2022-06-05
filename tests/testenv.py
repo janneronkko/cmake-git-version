@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-
-from __future__ import print_function, unicode_literals, division, absolute_import
-
 import os.path
 import shutil
 import tempfile
@@ -29,4 +25,3 @@ def getFile( name ):
 def install( filename, dest = '.' ):
   print( 'Copying {0} to {1}'.format( filename, dest ) )
   shutil.copy( getFile( filename ), dest )
-

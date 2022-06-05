@@ -1,10 +1,6 @@
-# -*- coding: utf-8 -*-
-
-from __future__ import print_function, unicode_literals, division, absolute_import
-
-import cmake
-import git
-import testenv
+from . import cmake
+from . import git
+from . import testenv
 
 import os
 import re
@@ -183,7 +179,7 @@ def parseValueFile( path ):
 
 CMakeListsFile = '''
 
-cmake_minimum_required( VERSION 2.8 )
+cmake_minimum_required( VERSION 3.0 )
 
 project( GitVersionTest )
 

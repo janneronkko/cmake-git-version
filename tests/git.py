@@ -1,8 +1,4 @@
-# -*- coding: utf-8 -*-
-
-from __future__ import print_function, unicode_literals, division, absolute_import
-
-from run import *
+from .run import *
 
 
 def add( path ):
@@ -13,6 +9,7 @@ def commit( message ):
 
 def init( path ):
   run( [ 'git', 'init', path ] )
+  run( [ 'git', 'config', 'tag.gpgsign', 'false' ], cwd = path )
 
 def revParse( ref ):
   return runAndGetSingleValue( [ 'git', 'rev-parse', ref ] )
@@ -28,4 +25,3 @@ def tag( name, message = None ):
     yield name
 
   run( cmd() )
-
