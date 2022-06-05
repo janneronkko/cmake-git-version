@@ -1,4 +1,2 @@
-
-set( ${VersionVar} "@GitVersion@" PARENT_SCOPE )
-set( ${CommitVar} "@GitHead@" PARENT_SCOPE )
-
+set(${VersionVar} "@GitVersion@" PARENT_SCOPE)
+set(${CommitVar} "@GitHead@" PARENT_SCOPE)
